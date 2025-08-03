@@ -4,7 +4,7 @@ import plotly.express as px
 
 # Constants
 LESSONS_PER_TEACHER = 27
-STUDENTS_PER_STREAM = 50
+STUDENTS_PER_STREAM = 40
 
 # Junior School Subjects - Expanded list
 JUNIOR_SUBJECTS = {
@@ -139,11 +139,12 @@ st.markdown(
     """
     <div style='text-align: center; font-size: 0.9em; line-height: 1.6;'>
         © 2025 Junior School Workload Calculator<br>
-        Developed with ❤️ by <strong>Paul Gabriel</strong><br>
+        Developed by <strong>Paul Gabriel</strong><br>
         <a href='https://github.com/yourusername/junior-school-workload' target='_blank'>View Source on GitHub</a> | 
         Licensed under <a href='https://opensource.org/licenses/MIT' target='_blank'>MIT License</a>
     </div>
     """,
     unsafe_allow_html=True
 )
+
 
