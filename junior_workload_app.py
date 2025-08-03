@@ -117,7 +117,7 @@ with st.sidebar:
     
     # 5. Advanced Options
     with st.expander("⚡ Advanced Settings"):
-        global LESSONS_PER_TEACHER
+        
         LESSONS_PER_TEACHER = st.number_input(
             "Max Lessons/Teacher", 
             min_value=1, 
@@ -269,3 +269,4 @@ else:
 
 if any(lessons > MAX_WORKLOAD for lessons in workload.values()):
     st.warning("⚠️ Some subjects exceed recommended weekly lesson load!")
+
