@@ -3,36 +3,42 @@ import math
 import plotly.express as px
 
 # Constants
+LESSONS_PER_TEACHER = 27
+STUDENTS_PER_STREAM = 50
+
+# Junior School Subjects - Expanded list
 JUNIOR_SUBJECTS = {
     "English": 5,
     "Kiswahili/KSL": 4,
     "Mathematics": 5,
-    "Integrated Science": 5,
+    "Integrated Science (Bio, Chem, Physics)": 5,
     "Pre-Technical and Pre-Career Education": 4,
     "Social Studies": 4,
-    "Religious Education": 4,
+    "Religious Education (CRE/IRE/HRE)": 4,
     "Agriculture": 4,
-    "Sports and Physical Education": 5
+    "Sports and Physical Education": 5,
+    "Life Skills Education": 1,
+    "Computer Science": 2,
+    "Business Studies": 2,
+    "Home Science": 2,
+    "Visual Arts": 2,
+    "Performing Arts": 2,
+    "Kenya Sign Language": 2,
+    "French / German / Arabic": 2,
 }
 
-LESSONS_PER_TEACHER = 27
-STUDENTS_PER_STREAM = 50
+# App layout
+st.set_page_config(page_title="Junior School Workload", layout="wide")
+st.title("🏫 Junior School Workload Calculator")
 
-st.set_page_config(page_title="Junior School Workload Calculator", layout="centered")
-st.title("📘 Junior School Workload Calculator")
-st.markdown("Use this tool to calculate streams, workload, and staffing requirements for Junior School (Grades 7–9).")
-
-# 📌 Enrollment Section
-st.header("📋 Enrollment")
+# Enrollment section
+st.header("👨‍👩‍👧‍👦 Learner Enrollment")
 col1, col2, col3 = st.columns(3)
-with col1:
-    grade7 = st.number_input("👨‍🎓 Grade 7 Students", min_value=0, value=0)
-with col2:
-    grade8 = st.number_input("👩‍🎓 Grade 8 Students", min_value=0, value=0)
-with col3:
-    grade9 = st.number_input("🎓 Grade 9 Students", min_value=0, value=0)
+grade7 = col1.number_input("Grade 7 Students", min_value=0, value=0)
+grade8 = col2.number_input("Grade 8 Students", min_value=0, value=0)
+grade9 = col3.number_input("Grade 9 Students", min_value=0, value=0)
 
-# Calculate Streams
+# Stream calculation
 streams = {
     "Grade 7": math.ceil(grade7 / STUDENTS_PER_STREAM),
     "Grade 8": math.ceil(grade8 / STUDENTS_PER_STREAM),
@@ -40,20 +46,24 @@ streams = {
 }
 total_streams = sum(streams.values())
 
-st.success(
-    f"✅ Streams Calculated:\n\n"
-    f"- Grade 7: {streams['Grade 7']} stream(s)\n"
-    f"- Grade 8: {streams['Grade 8']} stream(s)\n"
-    f"- Grade 9: {streams['Grade 9']} stream(s)\n"
-    f"**Total Streams: {total_streams}**"
+with st.expander("📊 Stream Summary", expanded=True):
+    st.write(f"• Grade 7: **{streams['Grade 7']}** stream(s)")
+    st.write(f"• Grade 8: **{streams['Grade 8']}** stream(s)")
+    st.write(f"• Grade 9: **{streams['Grade 9']}** stream(s)")
+    st.success(f"🎯 Total Streams: **{total_streams}**")
+
+# Subject selection
+st.header("📚 Select Subjects Offered")
+selected_subjects = st.multiselect(
+    "Tick the subjects taught in your school:",
+    list(JUNIOR_SUBJECTS.keys()),
+    default=list(JUNIOR_SUBJECTS.keys())[:9]
 )
 
-# 📌 Subject and Teacher Inputs
-st.header("📚 Subject Selection and Staffing")
-selected_subjects = st.multiselect("📝 Select Subjects Offered", list(JUNIOR_SUBJECTS.keys()), default=list(JUNIOR_SUBJECTS.keys()))
-teachers_available = st.number_input("👩‍🏫 Number of Teachers Available", min_value=0, value=0)
+# Number of teachers available
+teachers_available = st.number_input("👩‍🏫 Teachers Available", min_value=0, value=0)
 
-# 📌 Calculate Button
+# Calculate workload
 if st.button("🧮 Calculate Workload"):
     if not selected_subjects:
         st.error("⚠️ Please select at least one subject.")
@@ -63,64 +73,62 @@ if st.button("🧮 Calculate Workload"):
 
         for subject in selected_subjects:
             lessons_per_stream = JUNIOR_SUBJECTS[subject]
-            total = total_streams * lessons_per_stream
-            subject_loads[subject] = total
-            total_lessons += total
+            subject_total = total_streams * lessons_per_stream
+            subject_loads[subject] = subject_total
+            total_lessons += subject_total
 
-        required_teachers = math.ceil(total_lessons / LESSONS_PER_TEACHER)
-        difference = teachers_available - required_teachers
-
-        # 📊 Workload Summary
-        st.header("📊 Workload Summary")
-        st.metric("Total Weekly Lessons", total_lessons)
-
-        # Determine delta color
-        if difference > 0:
-            delta_color = "inverse"
-        elif difference < 0:
+        teachers_required = math.ceil(total_lessons / LESSONS_PER_TEACHER)
+        delta_teachers = teachers_available - teachers_required
+        delta_color = "normal"
+        if delta_teachers > 0:
             delta_color = "normal"
-        else:
-            delta_color = "off"
+        elif delta_teachers < 0:
+            delta_color = "inverse"
 
-        st.metric(
+        # Metrics
+        st.header("📊 Staffing Summary")
+        col1, col2 = st.columns(2)
+        col1.metric("Total Weekly Lessons", total_lessons)
+        col2.metric(
             "Teachers Needed",
-            required_teachers,
-            delta=difference,
+            teachers_required,
+            delta=delta_teachers,
             delta_color=delta_color
         )
 
-        # Table
-        st.subheader("📘 Subject Lesson Breakdown")
-        st.table([(subject, subject_loads[subject]) for subject in selected_subjects])
+        # Subject workload table
+        st.subheader("📘 Lessons Per Subject")
+        st.table([(subject, load) for subject, load in subject_loads.items()])
 
-        # Bar Chart
-        st.subheader("📊 Lessons per Subject (Bar Chart)")
+        # Bar chart
+        st.subheader("📊 Bar Chart: Lessons Per Subject")
         bar_fig = px.bar(
             x=list(subject_loads.keys()),
             y=list(subject_loads.values()),
-            labels={"x": "Subject", "y": "Weekly Lessons"},
-            title="Weekly Lessons per Subject",
-            color=list(subject_loads.keys()),
-            color_discrete_sequence=px.colors.qualitative.Pastel
+            labels={'x': 'Subjects', 'y': 'Weekly Lessons'},
+            title="Lesson Distribution by Subject",
+            color=list(subject_loads.values()),
+            color_continuous_scale='blues'
         )
         st.plotly_chart(bar_fig, use_container_width=True)
 
-        # Pie Chart
-        st.subheader("🎯 Teacher Distribution (Pie Chart)")
+        # Pie chart
+        st.subheader("🧮 Teacher Distribution (Estimated)")
+        pie_data = {
+            subject: round(load / LESSONS_PER_TEACHER, 2)
+            for subject, load in subject_loads.items()
+        }
         pie_fig = px.pie(
-            names=list(subject_loads.keys()),
-            values=list(subject_loads.values()),
-            title="Proportion of Weekly Lessons by Subject",
-            hole=0.3,
-            color_discrete_sequence=px.colors.sequential.RdBu
+            names=list(pie_data.keys()),
+            values=list(pie_data.values()),
+            title="Estimated Teacher Allocation Per Subject",
         )
         st.plotly_chart(pie_fig, use_container_width=True)
 
-        # Status Message
-        st.header("📌 Staffing Status")
-        if difference > 0:
-            st.success(f"✅ You have {difference} extra teacher(s).")
-        elif difference == 0:
-            st.info("✅ You have exactly the required number of teachers.")
+        # Feedback
+        if delta_teachers < 0:
+            st.error(f"❌ You need **{abs(delta_teachers)}** more teacher(s).")
+        elif delta_teachers == 0:
+            st.success("✅ You have the exact number of teachers required.")
         else:
-            st.error(f"❌ You need {abs(difference)} more teacher(s).")
+            st.success(f"✅ You have **{delta_teachers}** extra teacher(s).")
