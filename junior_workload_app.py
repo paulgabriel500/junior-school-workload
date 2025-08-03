@@ -3,8 +3,8 @@ import math
 import plotly.express as px
 
 # Constants
-LESSONS_PER_TEACHER = 27
-STUDENTS_PER_STREAM = 40
+LESSONS_PER_TEACHER = 25
+STUDENTS_PER_STREAM = 50
 
 # Junior School Subjects - Expanded list
 JUNIOR_SUBJECTS = {
@@ -147,6 +147,7 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+
 
 
 
