@@ -29,6 +29,7 @@ JUNIOR_SUBJECTS = {
 
 # App layout
 st.set_page_config(page_title="TSC Kenya Junior School Workload", layout="wide")
+st.title("Teachers Service Comisson-Kenya")
 st.title("🏫 Junior School Workload Calculator")
 
 # Enrollment section
@@ -146,6 +147,7 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+
 
 
 
