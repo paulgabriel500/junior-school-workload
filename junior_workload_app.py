@@ -1,9 +1,14 @@
 import streamlit as st
 import math
+import pandas as pd
 import plotly.express as px
+import json
+from io import StringIO
 
-# 🎓 Subject data: Lessons per week
-JUNIOR_SUBJECTS = {
+# ======================
+# 🛠️ CONFIGURATION
+# ======================
+DEFAULT_SUBJECTS = {
     "English": 5,
     "Kiswahili/KSL": 4,
     "Mathematics": 5,
@@ -15,116 +20,252 @@ JUNIOR_SUBJECTS = {
     "Sports and Physical Education": 5
 }
 
-LESSONS_PER_TEACHER = 27
-STUDENTS_PER_STREAM = 50
+LESSONS_PER_TEACHER = 27  # TSC standard
+STUDENTS_PER_STREAM = 40  # CBC recommended class size
+MAX_WORKLOAD = 27  # TSC maximum lessons/week
 
-# 🎨 Page setup
-st.set_page_config(page_title="Junior School Workload", page_icon="📘", layout="wide")
-st.title("📘 Junior School Workload Calculator")
-st.markdown("This tool helps you calculate the required number of teachers based on your enrollment and subject selection.")
+# ======================
+# 🎨 PAGE SETUP
+# ======================
+st.set_page_config(
+    page_title="CBC Teacher Workload Analyzer Pro",
+    page_icon="🏫",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# 🧮 Enrollment Inputs
-st.header("👩‍🏫 Enrollment Per Grade")
-col1, col2, col3 = st.columns(3)
-with col1:
-    grade7 = st.number_input("Grade 7", min_value=0, value=0)
-with col2:
-    grade8 = st.number_input("Grade 8", min_value=0, value=0)
-with col3:
-    grade9 = st.number_input("Grade 9", min_value=0, value=0)
+st.title("🏫 CBC Junior School Staffing Analyzer Pro")
+st.markdown("""
+*Official tool for calculating teacher workload with qualification tracking under Kenya's CBC system.*  
+🔴 **Red** = Critical staffing gap | 🟢 **Green** = Optimal staffing | 🟡 **Yellow** = Qualification mismatch
+""")
 
-# 📊 Stream Calculation
-streams = {
-    "Grade 7": math.ceil(grade7 / STUDENTS_PER_STREAM),
-    "Grade 8": math.ceil(grade8 / STUDENTS_PER_STREAM),
-    "Grade 9": math.ceil(grade9 / STUDENTS_PER_STREAM),
-}
-total_streams = sum(streams.values())
+# ======================
+# 📊 CORE FUNCTIONS
+# ======================
+def calculate_streams(enrollment):
+    return {grade: math.ceil(students / STUDENTS_PER_STREAM) 
+            for grade, students in enrollment.items()}
 
-with st.expander("📚 View Stream Breakdown"):
-    st.info(f"""
-    - Grade 7 Streams: {streams['Grade 7']}
-    - Grade 8 Streams: {streams['Grade 8']}
-    - Grade 9 Streams: {streams['Grade 9']}
-    - **Total Streams:** {total_streams}
-    """)
+def calculate_workload(streams, subjects):
+    return {subject: lessons * sum(streams.values()) 
+            for subject, lessons in subjects.items()}
 
-# 📘 Subject Selection
-st.header("📘 Select Subjects Offered")
-selected_subjects = st.multiselect("Choose Subjects", list(JUNIOR_SUBJECTS.keys()), default=list(JUNIOR_SUBJECTS.keys()))
+def analyze_staffing(workload, available_teachers, qualified_teachers):
+    total_lessons = sum(workload.values())
+    required_teachers = math.ceil(total_lessons / LESSONS_PER_TEACHER)
+    
+    # Qualification analysis
+    qualification_gaps = {}
+    for subject, lessons in workload.items():
+        required = math.ceil(lessons / LESSONS_PER_TEACHER)
+        qualified = qualified_teachers.get(subject, 0)
+        qualification_gaps[subject] = max(0, required - qualified)
+    
+    return {
+        "total_lessons": total_lessons,
+        "required_teachers": required_teachers,
+        "staffing_gap": available_teachers - required_teachers,
+        "qualification_gaps": qualification_gaps,
+        "total_qualification_gap": sum(qualification_gaps.values())
+    }
 
-# 👥 Teacher Input
-teachers_available = st.number_input("👨‍🏫 Number of Teachers Available", min_value=0, value=0)
-
-# 🚀 Start Calculation
-if st.button("🧮 Calculate Workload"):
-    if not selected_subjects:
-        st.warning("Please select at least one subject.")
-    else:
-        subject_loads = {}
-        total_lessons = 0
-
-        for subject in selected_subjects:
-            lessons = JUNIOR_SUBJECTS[subject]
-            total = total_streams * lessons
-            subject_loads[subject] = total
-            total_lessons += total
-
-        required_teachers = math.ceil(total_lessons / LESSONS_PER_TEACHER)
-
-        st.header("📊 Workload Summary")
-        st.success(f"""
-        - **Total Weekly Lessons:** {total_lessons}  
-        - **Teachers Required (at {LESSONS_PER_TEACHER} lessons/teacher):** {required_teachers}
-        """)
-
-        # 📘 Table of Subject Lessons
-        st.subheader("📚 Weekly Lessons by Subject")
-        st.table([(subject, subject_loads[subject]) for subject in selected_subjects])
-
-        # 📊 Bar Chart: Lessons per Subject
-        st.subheader("📈 Lessons Per Subject (Bar Chart)")
-        bar_data = {
-            "Subject": list(subject_loads.keys()),
-            "Lessons": list(subject_loads.values())
-        }
-        fig_bar = px.bar(
-            bar_data,
-            x="Subject",
-            y="Lessons",
-            color="Subject",
-            text="Lessons",
-            title="Weekly Lessons per Subject",
+# ======================
+# 📝 INPUT SECTION
+# ======================
+with st.sidebar:
+    st.header("⚙️ School Configuration")
+    
+    # 1. Enrollment Input
+    st.subheader("👩‍🎓 Student Enrollment")
+    enrollment = {
+        "Grade 7": st.number_input("Grade 7 Students", min_value=0, value=0),
+        "Grade 8": st.number_input("Grade 8 Students", min_value=0, value=0),
+        "Grade 9": st.number_input("Grade 9 Students", min_value=0, value=0)
+    }
+    
+    # 2. Subject Configuration
+    st.subheader("📚 Subjects Offered")
+    subject_config = {}
+    for subject, default_lessons in DEFAULT_SUBJECTS.items():
+        subject_config[subject] = st.number_input(
+            f"{subject} lessons/week",
+            min_value=1,
+            value=default_lessons,
+            key=f"lessons_{subject}"
         )
-        st.plotly_chart(fig_bar, use_container_width=True)
+    
+    # 3. Teacher Input
+    st.subheader("👨‍🏫 Staffing Data")
+    available_teachers = st.number_input("Total Teachers Available", min_value=0, value=10)
+    
+    # 4. Teacher Qualifications
+    st.subheader("🎓 Teacher Qualifications")
+    qualified_teachers = {}
+    for subject in subject_config.keys():
+        qualified_teachers[subject] = st.number_input(
+            f"Teachers qualified for {subject}",
+            min_value=0,
+            max_value=available_teachers,
+            value=0,
+            key=f"qual_{subject}"
+        )
+    
+    # Validation
+    if sum(qualified_teachers.values()) > available_teachers:
+        st.error("❗ Total qualified teachers exceed available staff!")
+    
+    # 5. Advanced Options
+    with st.expander("⚡ Advanced Settings"):
+        global LESSONS_PER_TEACHER
+        LESSONS_PER_TEACHER = st.number_input(
+            "Max Lessons/Teacher", 
+            min_value=1, 
+            value=27,
+            help="TSC standard is 27 lessons/week"
+        )
+        
+        # CSV Upload
+        uploaded_file = st.file_uploader("Upload Staffing CSV", type=["csv"])
+        if uploaded_file:
+            df = pd.read_csv(uploaded_file)
+            st.write("Uploaded Data Preview:", df.head())
 
-        # 🥧 Pie Chart: Teacher Distribution
-        st.subheader("🥧 Estimated Teacher Distribution (Pie Chart)")
-        pie_data = {
-            "Subject": [],
-            "Teachers Required": []
-        }
+# ======================
+# 📊 CALCULATIONS
+# ======================
+streams = calculate_streams(enrollment)
+workload = calculate_workload(streams, subject_config)
+analysis = analyze_staffing(workload, available_teachers, qualified_teachers)
 
-        for subject, lesson_count in subject_loads.items():
-            teachers_for_subject = lesson_count / LESSONS_PER_TEACHER
-            pie_data["Subject"].append(subject)
-            pie_data["Teachers Required"].append(round(teachers_for_subject, 2))
+# ======================
+# 📈 RESULTS DISPLAY
+# ======================
+tab1, tab2, tab3 = st.tabs(["📊 Summary", "📚 Subject Details", "📤 Export"])
 
-        fig_pie = px.pie(
-            pie_data,
-            names="Subject",
-            values="Teachers Required",
-            title="Proportion of Teachers Needed per Subject",
+with tab1:
+    # 1. Key Metrics
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Total Streams", sum(streams.values()))
+    with col2:
+        st.metric("Weekly Lessons", analysis["total_lessons"])
+    with col3:
+        status_color = "red" if analysis["staffing_gap"] < 0 else "green"
+        st.metric(
+            "Teachers Needed", 
+            analysis["required_teachers"],
+            delta=f"{analysis['staffing_gap']} gap",
+            delta_color=status_color
+        )
+    with col4:
+        qual_color = "red" if analysis["total_qualification_gap"] > 0 else "green"
+        st.metric(
+            "Qualification Gaps",
+            analysis["total_qualification_gap"],
+            delta="subject mismatches",
+            delta_color=qual_color
+        )
+    
+    # 2. Stream Breakdown
+    with st.expander("📝 Stream Details"):
+        st.table(pd.DataFrame.from_dict(streams, orient="index", columns=["Streams"]))
+    
+    # 3. Workload Distribution
+    st.plotly_chart(
+        px.pie(
+            names=list(workload.keys()),
+            values=list(workload.values()),
+            title="Lesson Distribution by Subject",
             hole=0.4
-        )
-        st.plotly_chart(fig_pie, use_container_width=True)
+        ),
+        use_container_width=True
+    )
 
-        # 🧑‍🏫 Staffing Gap
-        st.subheader("📌 Staffing Status")
-        difference = teachers_available - required_teachers
-        if difference > 0:
-            st.success(f"✅ You have **{difference} extra** teacher(s).")
-        elif difference == 0:
-            st.info("✅ You have exactly the **required number** of teachers.")
-        else:
-            st.error(f"❌ You need **{abs(difference)} more** teacher(s).")
+with tab2:
+    # 1. Subject-Level Analysis
+    st.subheader("Subject Workload & Qualifications")
+    subject_df = pd.DataFrame({
+        "Subject": list(workload.keys()),
+        "Weekly Lessons": list(workload.values()),
+        "Teachers Required": [math.ceil(lessons/LESSONS_PER_TEACHER) 
+                            for lessons in workload.values()],
+        "Teachers Qualified": list(qualified_teachers.values()),
+        "Qualification Gap": list(analysis["qualification_gaps"].values())
+    })
+    
+    # Color coding for gaps
+    def color_gaps(val):
+        color = 'red' if val > 0 else 'green'
+        return f'background-color: {color}'
+    
+    st.dataframe(
+        subject_df.style.applymap(color_gaps, subset=['Qualification Gap'])
+    )
+    
+    # 2. Qualification Visualization
+    st.plotly_chart(
+        px.bar(
+            subject_df,
+            x="Subject",
+            y=["Teachers Required", "Teachers Qualified"],
+            barmode="group",
+            title="Teacher Requirements vs Qualifications",
+            labels={"value": "Teachers", "variable": "Type"}
+        ),
+        use_container_width=True
+    )
+
+with tab3:
+    # 1. Report Generation
+    st.subheader("Export Options")
+    
+    # JSON Export
+    report_data = {
+        "enrollment": enrollment,
+        "streams": streams,
+        "workload": workload,
+        "qualifications": qualified_teachers,
+        "analysis": analysis
+    }
+    st.download_button(
+        label="📄 Download Full Report (JSON)",
+        data=json.dumps(report_data, indent=2),
+        file_name="cbc_staffing_report.json",
+        mime="application/json"
+    )
+    
+    # CSV Export
+    csv = subject_df.to_csv(index=False)
+    st.download_button(
+        label="📊 Download Subject Data (CSV)",
+        data=csv,
+        file_name="subject_analysis.csv",
+        mime="text/csv"
+    )
+
+# ======================
+# 🚨 ENHANCED COMPLIANCE ALERTS
+# ======================
+if analysis["staffing_gap"] < 0 or analysis["total_qualification_gap"] > 0:
+    alert_container = st.container()
+    with alert_container:
+        if analysis["staffing_gap"] < 0:
+            st.error(f"""
+            ❌ **Staffing Shortage**  
+            Need {abs(analysis["staffing_gap"])} more teachers (Total required: {analysis["required_teachers"]})
+            """)
+        
+        if analysis["total_qualification_gap"] > 0:
+            deficit_subjects = [
+                f"{sub} ({gap})" for sub, gap in analysis["qualification_gaps"].items() if gap > 0
+            ]
+            st.warning(f"""
+            🟡 **Qualification Gaps**  
+            Subjects with underqualified staff: {", ".join(deficit_subjects)}
+            """)
+else:
+    st.success("✅ **Optimal Staffing**: All requirements met with qualified teachers.")
+
+if any(lessons > MAX_WORKLOAD for lessons in workload.values()):
+    st.warning("⚠️ Some subjects exceed recommended weekly lesson load!")
